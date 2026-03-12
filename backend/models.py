@@ -1,8 +1,8 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, JSON
 from sqlalchemy.sql import func
-from .database import Base
+import database
 
-class JobDescription(Base):
+class JobDescription(database.Base):
     __tablename__ = "job_descriptions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -11,7 +11,7 @@ class JobDescription(Base):
     requirements = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-class Candidate(Base):
+class Candidate(database.Base):
     __tablename__ = "candidates"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -24,7 +24,7 @@ class Candidate(Base):
     cv_url = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-class MatchResult(Base):
+class MatchResult(database.Base):
     __tablename__ = "matches"
 
     id = Column(Integer, primary_key=True, index=True)

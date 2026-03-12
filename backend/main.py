@@ -11,9 +11,10 @@ import pandas as pd
 import io
 from fastapi.responses import StreamingResponse
 
-# Create tables
-database.Base.metadata.create_all(bind=database.engine)
-
+# In a serverless environment like Vercel, creating tables on every cold start is 
+# an anti-pattern and can cause Function Invocation timeouts. 
+# Tables are already created via our local development connection to Neon.
+# database.Base.metadata.create_all(bind=database.engine)
 app = FastAPI(title="CVMatch API")
 
 # Add CORS middleware

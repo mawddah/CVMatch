@@ -7,6 +7,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    print("WARNING: DATABASE_URL not set. Falling back to dummy SQLite for build/initialization.")
+    DATABASE_URL = "sqlite:///./dummy.db"
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -1,8 +1,10 @@
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from .database import engine, Base, get_db
-from . import models, parser, gemini_service
+import database
+import models
+import parser
+import gemini_service
 from typing import List
 import os
 import pandas as pd
@@ -10,7 +12,7 @@ import io
 from fastapi.responses import StreamingResponse
 
 # Create tables
-Base.metadata.create_all(bind=engine)
+database.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="CVMatch API")
 
@@ -28,7 +30,7 @@ def read_root():
     return {"message": "Welcome to CVMatch API"}
 
 @app.post("/upload-jd/")
-async def upload_jd(title: str, description: str, db: Session = Depends(get_db)):
+async def upload_jd(title: str, description: str, db: Session = Depends(database.get_db)):
     jd = models.JobDescription(title=title, description_text=description)
     db.add(jd)
     db.commit()
@@ -36,7 +38,7 @@ async def upload_jd(title: str, description: str, db: Session = Depends(get_db))
     return jd
 
 @app.get("/jobs/")
-async def get_jobs(db: Session = Depends(get_db)):
+async def get_jobs(db: Session = Depends(database.get_db)):
     jds = db.query(models.JobDescription).all()
     results = []
     for jd in jds:
@@ -49,7 +51,7 @@ async def get_jobs(db: Session = Depends(get_db)):
     return results
 
 @app.delete("/jobs/{jd_id}")
-async def delete_job(jd_id: int, db: Session = Depends(get_db)):
+async def delete_job(jd_id: int, db: Session = Depends(database.get_db)):
     jd = db.get(models.JobDescription, jd_id)
     if not jd:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -61,7 +63,7 @@ async def delete_job(jd_id: int, db: Session = Depends(get_db)):
     return {"message": "Job and associated data deleted successfully"}
 
 @app.put("/jobs/{jd_id}")
-async def update_job(jd_id: int, title: str, description: str, db: Session = Depends(get_db)):
+async def update_job(jd_id: int, title: str, description: str, db: Session = Depends(database.get_db)):
     jd = db.get(models.JobDescription, jd_id)
     if not jd:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -73,7 +75,7 @@ async def update_job(jd_id: int, title: str, description: str, db: Session = Dep
     return jd
 
 @app.post("/upload-cv/")
-async def upload_cv(jd_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_cv(jd_id: int, file: UploadFile = File(...), db: Session = Depends(database.get_db)):
     # 1. Parse CV
     content = await file.read()
     try:
@@ -125,7 +127,7 @@ async def upload_cv(jd_id: int, file: UploadFile = File(...), db: Session = Depe
     }
 
 @app.get("/candidates/{jd_id}/")
-async def get_candidates(jd_id: int, db: Session = Depends(get_db)):
+async def get_candidates(jd_id: int, db: Session = Depends(database.get_db)):
     results = db.query(models.Candidate, models.MatchResult).join(
         models.MatchResult, models.Candidate.id == models.MatchResult.candidate_id
     ).filter(models.MatchResult.jd_id == jd_id).order_by(models.MatchResult.match_percentage.desc()).all()
@@ -147,7 +149,7 @@ async def get_candidates(jd_id: int, db: Session = Depends(get_db)):
     return final_results
 
 @app.get("/reports/summary")
-async def get_report_summary(db: Session = Depends(get_db)):
+async def get_report_summary(db: Session = Depends(database.get_db)):
     results = db.query(
         models.JobDescription.title,
         models.Candidate.name,
@@ -169,7 +171,7 @@ async def get_report_summary(db: Session = Depends(get_db)):
     return chart_data
 
 @app.get("/reports/export")
-async def export_reports(db: Session = Depends(get_db)):
+async def export_reports(db: Session = Depends(database.get_db)):
     results = db.query(
         models.JobDescription.title.label("Job Description"),
         models.Candidate.name.label("Candidate Name"),

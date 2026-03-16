@@ -5,6 +5,8 @@ import database
 import models
 import parser
 import gemini_service
+import auth
+from fastapi.security import OAuth2PasswordRequestForm
 from typing import List
 import os
 import pandas as pd
@@ -30,8 +32,92 @@ app.add_middleware(
 def read_root():
     return {"message": "Welcome to CVMatch API"}
 
+# --- AUTHENTICATION ENDPOINTS ---
+
+@app.post("/auth/register", response_model=dict)
+def register_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
+    email = form_data.username.lower()
+    password = form_data.password
+    
+    # 1. Enforce Domain Restriction
+    if not email.endswith("@suikime.com"):
+        raise HTTPException(
+            status_code=403, 
+            detail="Access Denied: This system is restricted to Suido Kiko Middle East employees only. Please use your official @suikime.com email address."
+        )
+        
+    # 2. Check if email exists
+    existing_user = db.query(models.User).filter(models.User.email == email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+        
+    # 3. Determine role based on first user
+    is_first_user = db.query(models.User).count() == 0
+    role = "Admin" if is_first_user else "Viewer"
+    
+    # 4. Create user
+    hashed_password = auth.get_password_hash(password)
+    new_user = models.User(email=email, hashed_password=hashed_password, role=role)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return {"message": "User created successfully", "role": new_user.role}
+
+@app.post("/auth/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.email == form_data.username.lower()).first()
+    if not user or not auth.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
+        
+    access_token = auth.create_access_token(data={"sub": user.email, "role": user.role})
+    return {"access_token": access_token, "token_type": "bearer", "role": user.role, "email": user.email}
+
+@app.get("/users/me")
+def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
+    return {"email": current_user.email, "role": current_user.role}
+
+# --- ADMIN USER MANAGEMENT ENDPOINTS ---
+
+@app.get("/users/")
+def get_all_users(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
+    users = db.query(models.User).all()
+    return [{"id": u.id, "email": u.email, "role": u.role, "created_at": u.created_at} for u in users]
+
+@app.put("/users/{user_id}/role")
+def update_user_role(user_id: int, new_role: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
+    if new_role not in ["Admin", "Viewer"]:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    user = db.query(models.User).get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # Prevent the last admin from downgrading themselves
+    if user.id == current_user.id and new_role == "Viewer":
+        admin_count = db.query(models.User).filter(models.User.role == "Admin").count()
+        if admin_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot downgrade the only remaining Admin")
+            
+    user.role = new_role
+    db.commit()
+    return {"message": f"User role updated to {new_role}"}
+
+@app.delete("/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
+    user = db.query(models.User).get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+        
+    db.delete(user)
+    db.commit()
+    return {"message": "User deleted successfully"}
+
+# --- PROTECTED APP ENDPOINTS ---
+
 @app.post("/upload-jd/")
-async def upload_jd(title: str, description: str, db: Session = Depends(database.get_db)):
+async def upload_jd(title: str, description: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
     jd = models.JobDescription(title=title, description_text=description)
     db.add(jd)
     db.commit()
@@ -39,7 +125,7 @@ async def upload_jd(title: str, description: str, db: Session = Depends(database
     return jd
 
 @app.get("/jobs/")
-async def get_jobs(db: Session = Depends(database.get_db)):
+async def get_jobs(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     jds = db.query(models.JobDescription).all()
     results = []
     for jd in jds:
@@ -52,7 +138,7 @@ async def get_jobs(db: Session = Depends(database.get_db)):
     return results
 
 @app.delete("/jobs/{jd_id}")
-async def delete_job(jd_id: int, db: Session = Depends(database.get_db)):
+async def delete_job(jd_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
     jd = db.get(models.JobDescription, jd_id)
     if not jd:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -64,7 +150,7 @@ async def delete_job(jd_id: int, db: Session = Depends(database.get_db)):
     return {"message": "Job and associated data deleted successfully"}
 
 @app.put("/jobs/{jd_id}")
-async def update_job(jd_id: int, title: str, description: str, db: Session = Depends(database.get_db)):
+async def update_job(jd_id: int, title: str, description: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
     jd = db.get(models.JobDescription, jd_id)
     if not jd:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -76,7 +162,7 @@ async def update_job(jd_id: int, title: str, description: str, db: Session = Dep
     return jd
 
 @app.post("/upload-cv/")
-async def upload_cv(jd_id: int, file: UploadFile = File(...), db: Session = Depends(database.get_db)):
+async def upload_cv(jd_id: int, file: UploadFile = File(...), db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
     # 1. Parse CV
     content = await file.read()
     try:
@@ -128,7 +214,7 @@ async def upload_cv(jd_id: int, file: UploadFile = File(...), db: Session = Depe
     }
 
 @app.get("/candidates/{jd_id}/")
-async def get_candidates(jd_id: int, db: Session = Depends(database.get_db)):
+async def get_candidates(jd_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     results = db.query(models.Candidate, models.MatchResult).join(
         models.MatchResult, models.Candidate.id == models.MatchResult.candidate_id
     ).filter(models.MatchResult.jd_id == jd_id).order_by(models.MatchResult.match_percentage.desc()).all()
@@ -150,7 +236,7 @@ async def get_candidates(jd_id: int, db: Session = Depends(database.get_db)):
     return final_results
 
 @app.get("/reports/summary")
-async def get_report_summary(db: Session = Depends(database.get_db)):
+async def get_report_summary(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     results = db.query(
         models.JobDescription.title,
         models.Candidate.name,
@@ -172,7 +258,7 @@ async def get_report_summary(db: Session = Depends(database.get_db)):
     return chart_data
 
 @app.get("/reports/export")
-async def export_reports(db: Session = Depends(database.get_db)):
+async def export_reports(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     results = db.query(
         models.JobDescription.title.label("Job Description"),
         models.Candidate.name.label("Candidate Name"),

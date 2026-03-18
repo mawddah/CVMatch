@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { Download, TrendingUp, Users, CheckCircle, FileText } from 'lucide-react';
-import * as api from '../services/api';
+import { api } from '../services/api';
 
 const Reports = () => {
     const [data, setData] = useState([]);
@@ -24,7 +24,15 @@ const Reports = () => {
 
     const handleExport = async () => {
         try {
-            await api.downloadReport();
+            const blob = await api.exportReportsExcel();
+            // Create a link and trigger download
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'cvmatch_report.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
         } catch (error) {
             console.error("Export failed:", error);
         }

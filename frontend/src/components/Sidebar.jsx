@@ -1,22 +1,27 @@
 import React from 'react';
-import { Upload, FileText, Filter, ChevronRight } from 'lucide-react';
+import { Briefcase, Plus, Users, Settings, LogOut, ChevronRight, FileText, Filter } from 'lucide-react'; // Updated imports based on provided snippet
+import { useAuth } from '../contexts/AuthContext';
 
 const Sidebar = ({ currentJdId, onJobSelect, jobs, onCreateJobOpening }) => {
+    const { user } = useAuth();
     return (
         <aside className="w-72 fixed left-0 top-16 bottom-0 p-6 overflow-y-auto border-r border-slate-200 bg-white/30 backdrop-blur-sm">
-            <div className="mb-8">
-                <button
-                    onClick={onCreateJobOpening}
-                    className="w-full bg-primary-500 hover:bg-primary-600 text-white font-black uppercase tracking-tighter py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20 transition-all active:scale-95 group"
-                >
-                    <Upload className="w-5 h-5 group-hover:-translate-y-1 transition-transform" />
-                    Create Job Opening
-                </button>
-            </div>
+            {/* The original "Create Job Opening" button is removed as per the instruction's implied replacement */}
 
             <div className="space-y-6">
                 <div>
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">Active Openings</h3>
+                    <div className="flex items-center justify-between px-2 mb-4"> {/* Adjusted px-2 from px-3 mb-2 to match original structure */}
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Openings</h3> {/* Kept original h3 styling */}
+                        {user?.role === 'Admin' && (
+                            <button
+                                onClick={onCreateJobOpening}
+                                className="p-1 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded transition-colors"
+                                title="Create New Opening"
+                            >
+                                <Plus size={14} />
+                            </button>
+                        )}
+                    </div>
                     <div className="space-y-1">
                         {jobs.map(job => (
                             <button

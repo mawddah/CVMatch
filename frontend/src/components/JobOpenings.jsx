@@ -1,6 +1,10 @@
-import { Briefcase, Users, Calendar, ChevronRight, MoreHorizontal, CheckCircle2, Clock, Edit2, Trash2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Briefcase, MapPin, Users, Edit2, Trash2, ArrowRight } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const JobOpenings = ({ jobs, onViewPipeline, onEditJob, onDeleteJob }) => {
+    const { user } = useAuth();
+
     return (
         <div className="p-8 max-w-7xl mx-auto w-full flex-1 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
@@ -29,11 +33,11 @@ const JobOpenings = ({ jobs, onViewPipeline, onEditJob, onDeleteJob }) => {
                                     <h3 className="text-xl font-black text-slate-900 group-hover:text-primary-600 transition-colors">{job.title}</h3>
                                     <div className="flex items-center gap-4 mt-1">
                                         <div className="flex items-center gap-1.5 text-slate-400 text-sm font-bold uppercase tracking-wider">
-                                            <Calendar className="w-3.5 h-3.5" />
+                                            <ArrowRight className="w-3.5 h-3.5" /> {/* Changed from Calendar */}
                                             Posted 2 days ago
                                         </div>
                                         <div className="flex items-center gap-1.5 text-emerald-500 text-sm font-bold uppercase tracking-wider">
-                                            <Clock className="w-3.5 h-3.5" />
+                                            <MapPin className="w-3.5 h-3.5" /> {/* Changed from Clock */}
                                             Active
                                         </div>
                                     </div>
@@ -55,28 +59,34 @@ const JobOpenings = ({ jobs, onViewPipeline, onEditJob, onDeleteJob }) => {
                                         className="bg-slate-900 text-white font-black py-3 px-6 rounded-xl hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-2"
                                     >
                                         View Pipeline
-                                        <ChevronRight className="w-4 h-4" />
+                                        <ArrowRight className="w-4 h-4" /> {/* Changed from ChevronRight */}
                                     </button>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => onEditJob(job)}
-                                            className="p-3 hover:bg-primary-50 rounded-xl transition-colors text-slate-400 hover:text-primary-500"
-                                            title="Edit Job"
-                                        >
-                                            <Edit2 className="w-5 h-5" />
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                if (window.confirm(`Are you sure you want to delete "${job.title}"? This will remove all associated candidates and match results.`)) {
-                                                    onDeleteJob(job.id);
-                                                }
-                                            }}
-                                            className="p-3 hover:bg-red-50 rounded-xl transition-colors text-slate-400 hover:text-red-500"
-                                            title="Delete Job"
-                                        >
-                                            <Trash2 className="w-5 h-5" />
-                                        </button>
-                                    </div>
+                                    {user?.role === 'Admin' && (
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onEditJob(job);
+                                                }}
+                                                className="p-3 hover:bg-primary-50 rounded-xl transition-colors text-slate-400 hover:text-primary-500"
+                                                title="Edit Job"
+                                            >
+                                                <Edit2 className="w-5 h-5" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.confirm(`Are you sure you want to delete "${job.title}"? This will remove all associated candidates and match results.`)) {
+                                                        onDeleteJob(job.id);
+                                                    }
+                                                }}
+                                                className="p-3 hover:bg-red-50 rounded-xl transition-colors text-slate-400 hover:text-red-500"
+                                                title="Delete Job"
+                                            >
+                                                <Trash2 className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

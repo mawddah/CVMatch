@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Briefcase, FileText, Send, Save } from 'lucide-react';
-import * as api from '../services/api';
+import { api } from '../services/api';
 
 const CreateJobModal = ({ isOpen, onClose, onJobCreated, onJobUpdated, initialData = null }) => {
     const [title, setTitle] = useState(initialData?.title || '');
@@ -12,11 +12,11 @@ const CreateJobModal = ({ isOpen, onClose, onJobCreated, onJobUpdated, initialDa
         setLoading(true);
         try {
             if (initialData) {
-                const data = await api.updateJob(initialData.id, title, description);
-                onJobUpdated(data);
+                const updatedJob = await api.updateJob(initialData.id, title, description);
+                onJobUpdated(updatedJob);
             } else {
-                const data = await api.uploadJD(title, description);
-                onJobCreated(data);
+                const newJob = await api.uploadJD(title, description);
+                onJobCreated(newJob);
             }
             onClose();
             setTitle('');

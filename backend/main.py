@@ -12,6 +12,7 @@ import os
 import pandas as pd
 import io
 from fastapi.responses import StreamingResponse
+from fastapi import Request
 
 # In a serverless environment like Vercel, creating tables on every cold start is 
 # an anti-pattern and can cause Function Invocation timeouts. 
@@ -19,10 +20,19 @@ from fastapi.responses import StreamingResponse
 # database.Base.metadata.create_all(bind=database.engine)
 app = FastAPI(title="CVMatch API")
 
-# Add CORS middleware
+# Configure CORS
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:3000",
+    "https://cvmatch-mu.vercel.app"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,33 +46,39 @@ def read_root():
 
 @app.post("/auth/register", response_model=dict)
 def register_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
-    email = form_data.username.lower()
-    password = form_data.password
-    
-    # 1. Enforce Domain Restriction
-    if not email.endswith("@suikime.com"):
-        raise HTTPException(
-            status_code=403, 
-            detail="Access Denied: This system is restricted to Suido Kiko Middle East employees only. Please use your official @suikime.com email address."
-        )
+    try:
+        email = form_data.username.lower()
+        password = form_data.password
         
-    # 2. Check if email exists
-    existing_user = db.query(models.User).filter(models.User.email == email).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        # 1. Enforce Domain Restriction
+        if not email.endswith("@suikime.com"):
+            raise HTTPException(
+                status_code=403, 
+                detail="Access Denied: This system is restricted to Suido Kiko Middle East employees only. Please use your official @suikime.com email address."
+            )
+            
+        # 2. Check if email exists
+        existing_user = db.query(models.User).filter(models.User.email == email).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+            
+        # 3. Determine role based on first user
+        is_first_user = db.query(models.User).count() == 0
+        role = "Admin" if is_first_user else "Viewer"
         
-    # 3. Determine role based on first user
-    is_first_user = db.query(models.User).count() == 0
-    role = "Admin" if is_first_user else "Viewer"
-    
-    # 4. Create user
-    hashed_password = auth.get_password_hash(password)
-    new_user = models.User(email=email, hashed_password=hashed_password, role=role)
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    
-    return {"message": "User created successfully", "role": new_user.role}
+        # 4. Create user
+        hashed_password = auth.get_password_hash(password)
+        new_user = models.User(email=email, hashed_password=hashed_password, role=role)
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        return {"message": "User created successfully", "role": new_user.role}
+    except Exception as e:
+        print(f"ERROR in register_user: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 @app.post("/auth/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):

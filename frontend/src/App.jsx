@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './components/Login';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import CandidateCard from './components/CandidateCard';
@@ -10,9 +14,10 @@ import SettingsView from './components/Settings';
 import CreateJobModal from './components/CreateJobModal';
 import { Plus, LayoutGrid, List } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
-import * as api from './services/api';
+import { api } from './services/api';
 
-function App() {
+function Dashboard() {
+  const { logout, user } = useAuth();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isCreateJobOpen, setIsCreateJobOpen] = useState(false);
   const [editingJob, setEditingJob] = useState(null);
@@ -112,11 +117,11 @@ function App() {
     }
 
     if (activePage === 'Profile Settings') {
-      return <SettingsView activeTab="profile" />;
+      return <SettingsView initialTab="profile" />;
     }
 
     if (activePage === 'Team Management') {
-      return <SettingsView activeTab="team" />;
+      return <SettingsView initialTab="team" />;
     }
 
     if (activePage === 'Dashboard' || activePage === 'AI CV Matching') {
@@ -147,13 +152,15 @@ function App() {
                   <List className="w-5 h-5" />
                 </button>
               </div>
-              <button
-                onClick={() => setIsUploadOpen(true)}
-                className="bg-primary-500 hover:bg-primary-600 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 shadow-lg shadow-primary-500/20 transition-all active:scale-95"
-              >
-                <Plus className="w-5 h-5" />
-                Add Candidates
-              </button>
+              {user?.role === 'Admin' && (
+                <button
+                  onClick={() => setIsUploadOpen(true)}
+                  className="bg-primary-500 hover:bg-primary-600 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 shadow-lg shadow-primary-500/20 transition-all active:scale-95"
+                >
+                  <Plus className="w-5 h-5" />
+                  Add Candidates
+                </button>
+              )}
             </div>
           </div>
 
@@ -176,12 +183,14 @@ function App() {
               </div>
               <h3 className="text-xl font-bold text-slate-900">No candidates yet</h3>
               <p className="text-slate-500 mt-1 mb-6">Upload some CVs to start the AI matching process</p>
-              <button
-                onClick={() => setIsUploadOpen(true)}
-                className="text-primary-600 font-bold hover:underline"
-              >
-                Upload CVs now
-              </button>
+              {user?.role === 'Admin' && (
+                <button
+                  onClick={() => setIsUploadOpen(true)}
+                  className="text-primary-600 font-bold hover:underline"
+                >
+                  Upload CVs now
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -198,7 +207,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      <Header activePage={activePage} onPageChange={setActivePage} />
+      <Header activePage={activePage} onPageChange={setActivePage} onLogout={logout} onUploadClick={() => setIsUploadOpen(true)} selectedJob={currentJdId} />
       <Sidebar
         currentJdId={currentJdId}
         onJobSelect={setCurrentJdId}
@@ -244,4 +253,22 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route 
+            path="/*" 
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+        </Routes>
+      </Router>
+    </AuthProvider>
+  );
+}

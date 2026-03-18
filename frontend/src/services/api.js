@@ -1,65 +1,106 @@
 import axios from 'axios';
 
+// Use environment variable for API URL in production, fallback to localhost for development
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-const api = axios.create({
-    baseURL: API_URL,
+const apiClient = axios.create({
+  baseURL: API_URL,
 });
 
-export const uploadJD = async (title, description) => {
-    const response = await api.post(`/upload-jd/?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`);
-    return response.data;
-};
+// Request interceptor to attach JWT token
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
-export const getJobs = async () => {
-    const response = await api.get('/jobs/');
+export const api = {
+  // --- AUTHENTICATION ---
+  login: async (email, password) => {
+    // OAuth2PasswordRequestForm expects form data, not JSON
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
+    
+    const response = await apiClient.post('/auth/login', formData, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
     return response.data;
-};
+  },
+  register: async (email, password) => {
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
 
-export const deleteJob = async (jdId) => {
-    const response = await api.delete(`/jobs/${jdId}`);
+    const response = await apiClient.post('/auth/register', formData, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
     return response.data;
-};
+  },
 
-export const updateJob = async (jdId, title, description) => {
-    const response = await api.put(`/jobs/${jdId}?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`);
+  // --- CV & JOBS ---
+  uploadJD: async (title, description) => {
+    const response = await apiClient.post('/upload-jd/', null, {
+      params: { title, description }
+    });
     return response.data;
-};
-
-export const uploadCV = async (jdId, file) => {
+  },
+  getJobs: async () => {
+    const response = await apiClient.get('/jobs/');
+    return response.data;
+  },
+  deleteJob: async (jdId) => {
+    const response = await apiClient.delete(`/jobs/${jdId}`);
+    return response.data;
+  },
+  updateJob: async (jdId, title, description) => {
+    const response = await apiClient.put(`/jobs/${jdId}`, null, {
+        params: { title, description }
+    });
+    return response.data;
+  },
+  uploadCV: async (jdId, file) => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post(`/upload-cv/?jd_id=${jdId}`, formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data',
-        },
+    const response = await apiClient.post(`/upload-cv/?jd_id=${jdId}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
     return response.data;
-};
-
-export const getCandidates = async (jdId) => {
-    const response = await api.get(`/candidates/${jdId}/`);
+  },
+  getCandidates: async (jdId) => {
+    const response = await apiClient.get(`/candidates/${jdId}/`);
     return response.data;
-};
-
-export const getReportSummary = async () => {
-    const response = await api.get('/reports/summary');
+  },
+  
+  // --- REPORTS ---
+  getReportSummary: async () => {
+    const response = await apiClient.get('/reports/summary');
     return response.data;
-};
-
-export const downloadReport = async () => {
-    const response = await api.get('/reports/export', {
-        responseType: 'blob',
+  },
+  exportReportsExcel: async () => {
+    const response = await apiClient.get('/reports/export', {
+      responseType: 'blob'
     });
+    return response.data;
+  },
 
-    // Create a link and trigger download
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'cvmatch_report.xlsx');
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  // --- USER MANAGEMENT (Admin) ---
+  getUsers: async () => {
+    const response = await apiClient.get('/users/');
+    return response.data;
+  },
+  updateUserRole: async (userId, role) => {
+    const response = await apiClient.put(`/users/${userId}/role`, null, {
+      params: { new_role: role }
+    });
+    return response.data;
+  },
+  deleteUser: async (userId) => {
+    const response = await apiClient.delete(`/users/${userId}`);
+    return response.data;
+  }
 };
-
-export default api;

@@ -19,14 +19,12 @@
       "dest": "/backend/main.py"
     },
     {
-      "handle": "filesystem"
+      "src": "/assets/(.*)",
+      "dest": "/frontend/dist/assets/$1"
     },
     {
-      "src": "/(.*)",
+      "src": "/([^/]+\\.[a-zA-Z0-9]+)",
       "dest": "/frontend/dist/$1"
-    },
-    {
-      "handle": "miss"
     },
     {
       "src": "/(.*)",

@@ -18,7 +18,7 @@ from fastapi import Request
 # an anti-pattern and can cause Function Invocation timeouts. 
 # Tables are already created via our local development connection to Neon.
 # database.Base.metadata.create_all(bind=database.engine)
-app = FastAPI(title="CVMatch API")
+app = FastAPI(title="CVMatch API", root_path="/api")
 
 # Configure CORS
 origins = [

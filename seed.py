@@ -1,35 +1,29 @@
-from backend.database import SessionLocal, engine
-from backend import models
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
+import backend.database as database
+import backend.models as models
+import backend.auth as auth
 
-def seed():
-    # Create tables
-    models.Base.metadata.create_all(bind=engine)
+def main():
+    db = database.SessionLocal()
+    email = "a-mawaddah@suikime.com"
+    password = "123456"
     
-    db = SessionLocal()
-    try:
-        # Check if JD already exists
-        jd = db.query(models.JobDescription).first()
-        if not jd:
-            jd = models.JobDescription(
-                title="Senior React Developer",
-                description_text="""
-                We are seeking a highly motivated and experienced Project Manager to oversee our team.
-                Requirements:
-                - 5+ years of experience in React and modern JavaScript.
-                - Strong experience with state management (Redux, Zustand, etc.).
-                - Familiarity with Tailwind CSS and Framer Motion.
-                - Experience with Backend integration (Python/Node.js).
-                - Excellent communication and leadership skills.
-                """,
-                requirements="React, TypeScript, Tailwind, 5+ years exp"
-            )
-            db.add(jd)
-            db.commit()
-            print("Database seeded with 'Senior React Developer' JD (ID: 1)")
-        else:
-            print(f"JD already exists: {jd.title} (ID: {jd.id})")
-    finally:
-        db.close()
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if user:
+        print(f"User {email} already exists. Updating role to Admin and updating password...")
+        user.role = "Admin"
+        user.hashed_password = auth.get_password_hash(password)
+        db.commit()
+    else:
+        print(f"Creating user {email} as Admin...")
+        hashed_password = auth.get_password_hash(password)
+        new_user = models.User(email=email, hashed_password=hashed_password, role="Admin")
+        db.add(new_user)
+        db.commit()
+        
+    print("Done!")
 
 if __name__ == "__main__":
-    seed()
+    main()

@@ -12,7 +12,7 @@ if not api_key:
     raise ValueError("CRITICAL ERROR: GEMINI_API_KEY is missing! You must add GEMINI_API_KEY to your Vercel Dashboard Environment Variables.")
 
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 def parse_json_response(response_text):
     json_str = response_text.strip()

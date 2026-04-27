@@ -67,7 +67,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onAnalysisCo
                     setSelectedCandidateIds(prev => new Set(prev).add(newCandidate.id));
                     
                     if (i < newFiles.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 4000)); // 4s delay
+                        await new Promise(resolve => setTimeout(resolve, 6000)); // 6s delay to stay well under Gemini's 15 RPM limit
                     }
                 }
             } catch (error: any) {
@@ -123,7 +123,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onAnalysisCo
                     await api.analyzeMatches(currentJdId, [ids[i]]);
                     // Add a 3 second delay between each candidate to avoid Gemini 429 rate limits
                     if (i < ids.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        await new Promise(resolve => setTimeout(resolve, 6000)); // 6s delay to stay well under 15 RPM limit
                     }
                 } catch (err: any) {
                     console.error("Analysis failed for candidate", ids[i], err);

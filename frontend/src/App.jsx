@@ -12,6 +12,7 @@ import Reports from './components/Reports';
 import JobOpenings from './components/JobOpenings';
 import SettingsView from './components/Settings';
 import CreateJobModal from './components/CreateJobModal';
+import TeamManagement from './components/TeamManagement.tsx';
 import { Plus, LayoutGrid, List } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { api } from './services/api';
@@ -121,7 +122,7 @@ function Dashboard() {
     }
 
     if (activePage === 'Team Management') {
-      return <SettingsView initialTab="team" />;
+      return <TeamManagement />;
     }
 
     if (activePage === 'Dashboard' || activePage === 'AI CV Matching') {
@@ -152,15 +153,13 @@ function Dashboard() {
                   <List className="w-5 h-5" />
                 </button>
               </div>
-              {user?.role === 'Admin' && (
-                <button
-                  onClick={() => setIsUploadOpen(true)}
-                  className="bg-primary-500 hover:bg-primary-600 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 shadow-lg shadow-primary-500/20 transition-all active:scale-95"
-                >
-                  <Plus className="w-5 h-5" />
-                  Add Candidates
-                </button>
-              )}
+              <button
+                onClick={() => setIsUploadOpen(true)}
+                className="bg-primary-500 hover:bg-primary-600 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 shadow-lg shadow-primary-500/20 transition-all active:scale-95"
+              >
+                <Plus className="w-5 h-5" />
+                Add Candidates
+              </button>
             </div>
           </div>
 
@@ -183,14 +182,12 @@ function Dashboard() {
               </div>
               <h3 className="text-xl font-bold text-slate-900">No candidates yet</h3>
               <p className="text-slate-500 mt-1 mb-6">Upload some CVs to start the AI matching process</p>
-              {user?.role === 'Admin' && (
-                <button
-                  onClick={() => setIsUploadOpen(true)}
-                  className="text-primary-600 font-bold hover:underline"
-                >
-                  Upload CVs now
-                </button>
-              )}
+              <button
+                onClick={() => setIsUploadOpen(true)}
+                className="text-primary-600 font-bold hover:underline"
+              >
+                Upload CVs now
+              </button>
             </div>
           )}
         </div>

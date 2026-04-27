@@ -71,6 +71,20 @@ export const api = {
     });
     return response.data;
   },
+  storeCV: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await apiClient.post(`/store-cv/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+  summarizeCandidate: async (id) => {
+    const response = await apiClient.post(`/candidates/${id}/summarize`);
+    return response.data;
+  },
   getCandidates: async (jdId) => {
     const response = await apiClient.get(`/candidates/${jdId}/`);
     return response.data;

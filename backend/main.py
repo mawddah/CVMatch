@@ -86,11 +86,16 @@ def register_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session 
 
 @app.post("/auth/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
+    from datetime import timedelta
     user = db.query(models.User).filter(models.User.email == form_data.username.lower()).first()
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
         
-    access_token = auth.create_access_token(data={"sub": user.email, "role": user.role})
+    access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth.create_access_token(
+        data={"sub": user.email, "role": user.role},
+        expires_delta=access_token_expires
+    )
     return {"access_token": access_token, "token_type": "bearer", "role": user.role, "email": user.email}
 
 @app.get("/users/me")
@@ -137,7 +142,7 @@ def delete_user(user_id: int, db: Session = Depends(database.get_db), current_us
 # --- PROTECTED APP ENDPOINTS ---
 
 @app.post("/upload-jd/")
-async def upload_jd(title: str, description: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
+async def upload_jd(title: str, description: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     jd = models.JobDescription(title=title, description_text=description)
     db.add(jd)
     db.commit()
@@ -158,7 +163,7 @@ async def get_jobs(db: Session = Depends(database.get_db), current_user: models.
     return results
 
 @app.delete("/jobs/{jd_id}")
-async def delete_job(jd_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
+async def delete_job(jd_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     jd = db.get(models.JobDescription, jd_id)
     if not jd:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -170,7 +175,7 @@ async def delete_job(jd_id: int, db: Session = Depends(database.get_db), current
     return {"message": "Job and associated data deleted successfully"}
 
 @app.put("/jobs/{jd_id}")
-async def update_job(jd_id: int, title: str, description: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
+async def update_job(jd_id: int, title: str, description: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     jd = db.get(models.JobDescription, jd_id)
     if not jd:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -182,56 +187,71 @@ async def update_job(jd_id: int, title: str, description: str, db: Session = Dep
     return jd
 
 @app.post("/upload-cv/")
-async def upload_cv(jd_id: int, file: UploadFile = File(...), db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
-    # 1. Parse CV
-    content = await file.read()
+async def upload_cv(jd_id: int, file: UploadFile = File(...), db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    import traceback
     try:
-        raw_text = parser.parse_cv(file.filename, content)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    
-    # 2. Extract Candidate Info using Gemini
-    candidate_info = await gemini_service.extract_candidate_info(raw_text)
-    if not candidate_info:
-        raise HTTPException(status_code=500, detail="Failed to extract candidate info")
-    
-    candidate = models.Candidate(
-        name=candidate_info.get("name"),
-        email=candidate_info.get("email"),
-        experience_years=candidate_info.get("experience_years"),
-        education=candidate_info.get("education"),
-        skills=candidate_info.get("skills"),
-        raw_text=raw_text
-    )
-    db.add(candidate)
-    db.commit()
-    db.refresh(candidate)
-    
-    # 3. Analyze Match using Gemini
-    jd = db.get(models.JobDescription, jd_id)
-    if not jd:
-        raise HTTPException(status_code=404, detail="Job Description not found")
+        import base64
         
-    analysis = await gemini_service.analyze_match(raw_text, jd.description_text)
-    if not analysis:
-        raise HTTPException(status_code=500, detail="Failed to analyze match")
+        # 1. Parse CV
+        content = await file.read()
+        try:
+            raw_text = parser.parse_cv(file.filename, content)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+            
+        mime_type = "application/pdf" if file.filename.lower().endswith(".pdf") else "application/octet-stream"
+        encoded_pdf = base64.b64encode(content).decode('utf-8')
+        data_uri = f"data:{mime_type};base64,{encoded_pdf}"
         
-    match_result = models.MatchResult(
-        jd_id=jd_id,
-        candidate_id=candidate.id,
-        match_percentage=analysis.get("match_percentage"),
-        strengths=analysis.get("strengths"),
-        weaknesses=analysis.get("weaknesses"),
-        soft_skills_analysis=analysis.get("soft_skills_analysis"),
-        culture_fit_score=analysis.get("culture_fit_score")
-    )
-    db.add(match_result)
-    db.commit()
-    
-    return {
-        "candidate": candidate,
-        "analysis": analysis
-    }
+        # 2. Extract Candidate Info using Gemini
+        candidate_info = await gemini_service.extract_candidate_info(raw_text)
+        if not candidate_info:
+            raise HTTPException(status_code=500, detail="Failed to extract candidate info")
+        
+        candidate = models.Candidate(
+            name=candidate_info.get("name"),
+            email=candidate_info.get("email"),
+            experience_years=candidate_info.get("experience_years"),
+            education=candidate_info.get("education"),
+            skills=candidate_info.get("skills"),
+            raw_text=raw_text,
+            cv_url=data_uri
+        )
+        db.add(candidate)
+        db.commit()
+        db.refresh(candidate)
+        
+        # 3. Analyze Match using Gemini
+        jd = db.get(models.JobDescription, jd_id)
+        if not jd:
+            raise HTTPException(status_code=404, detail="Job Description not found")
+            
+        analysis = await gemini_service.analyze_match(raw_text, jd.description_text)
+        if not analysis:
+            raise HTTPException(status_code=500, detail="Failed to analyze match")
+            
+        match_result = models.MatchResult(
+            jd_id=jd_id,
+            candidate_id=candidate.id,
+            match_percentage=analysis.get("match_percentage"),
+            strengths=analysis.get("strengths"),
+            weaknesses=analysis.get("weaknesses"),
+            soft_skills_analysis=analysis.get("soft_skills_analysis"),
+            culture_fit_score=analysis.get("culture_fit_score")
+        )
+        db.add(match_result)
+        db.commit()
+        
+        return {
+            "candidate": candidate,
+            "analysis": analysis
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = f"{str(e)} | Trace: {traceback.format_exc()}"
+        print(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @app.get("/candidates/{jd_id}/")
 async def get_candidates(jd_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
@@ -244,6 +264,8 @@ async def get_candidates(jd_id: int, db: Session = Depends(database.get_db), cur
         final_results.append({
             "id": cand.id,
             "name": cand.name,
+            "email": cand.email,
+            "cv_url": cand.cv_url,
             "match_percentage": match.match_percentage,
             "skills": cand.skills,
             "experience_years": cand.experience_years,
@@ -254,6 +276,58 @@ async def get_candidates(jd_id: int, db: Session = Depends(database.get_db), cur
             "culture_fit_score": match.culture_fit_score
         })
     return final_results
+
+@app.get("/candidates/")
+async def get_all_candidates(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    return db.query(models.Candidate).order_by(models.Candidate.created_at.desc()).all()
+
+@app.post("/candidates/{id}/summarize")
+async def summarize_candidate(id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    candidate = db.get(models.Candidate, id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+        
+    summary = await gemini_service.generate_profile_summary(candidate.raw_text)
+    return summary
+
+@app.post("/store-cv/")
+async def store_cv(file: UploadFile = File(...), db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    import traceback
+    import base64
+    try:
+        content = await file.read()
+        try:
+            raw_text = parser.parse_cv(file.filename, content)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+            
+        candidate_info = await gemini_service.extract_candidate_info(raw_text)
+        if not candidate_info:
+            raise HTTPException(status_code=500, detail="Failed to extract candidate info")
+            
+        mime_type = "application/pdf" if file.filename.lower().endswith(".pdf") else "application/octet-stream"
+        encoded_pdf = base64.b64encode(content).decode('utf-8')
+        data_uri = f"data:{mime_type};base64,{encoded_pdf}"
+        
+        candidate = models.Candidate(
+            name=candidate_info.get("name"),
+            email=candidate_info.get("email"),
+            experience_years=candidate_info.get("experience_years"),
+            education=candidate_info.get("education"),
+            skills=candidate_info.get("skills"),
+            raw_text=raw_text,
+            cv_url=data_uri
+        )
+        db.add(candidate)
+        db.commit()
+        db.refresh(candidate)
+        return candidate
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = f"{str(e)} | Trace: {traceback.format_exc()}"
+        print(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @app.get("/reports/summary")
 async def get_report_summary(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):

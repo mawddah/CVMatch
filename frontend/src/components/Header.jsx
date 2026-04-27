@@ -49,16 +49,14 @@ const Header = ({ activePage, onPageChange, onUploadClick, selectedJob, onLogout
                     />
                 </div>
 
-                {user?.role === 'Admin' && (
-                    <button
-                        onClick={onUploadClick}
-                        disabled={!selectedJob}
-                        className="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <Plus size={16} />
-                        <span className="hidden sm:inline">Upload CVs</span>
-                    </button>
-                )}
+                <button
+                    onClick={onUploadClick}
+                    disabled={!selectedJob}
+                    className="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <Plus size={16} />
+                    <span className="hidden sm:inline">Upload CVs</span>
+                </button>
 
                 <button className="p-2 hover:bg-slate-100 rounded-xl transition-colors relative">
                     <Bell className="w-5 h-5 text-slate-600" />

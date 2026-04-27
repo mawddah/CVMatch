@@ -61,10 +61,14 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onAnalysisCo
             // Automatically store in DB and select them
             setIsUploading(true);
             try {
-                for (const file of newFiles) {
-                    const newCandidate = await api.storeCV(file);
+                for (let i = 0; i < newFiles.length; i++) {
+                    const newCandidate = await api.storeCV(newFiles[i]);
                     setAllCandidates(prev => [newCandidate, ...prev]);
                     setSelectedCandidateIds(prev => new Set(prev).add(newCandidate.id));
+                    
+                    if (i < newFiles.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 4000)); // 4s delay
+                    }
                 }
             } catch (error: any) {
                 console.error("Failed to auto-store CV:", error);

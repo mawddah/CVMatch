@@ -112,13 +112,29 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onAnalysisCo
 
         setIsUploading(true);
         try {
-            await api.analyzeMatches(currentJdId, Array.from(selectedCandidateIds));
+            let errorMsg = "";
+            const ids = Array.from(selectedCandidateIds);
+            for (let i = 0; i < ids.length; i++) {
+                try {
+                    await api.analyzeMatches(currentJdId, [ids[i]]);
+                    // Add a 3 second delay between each candidate to avoid Gemini 429 rate limits
+                    if (i < ids.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                    }
+                } catch (err: any) {
+                    console.error("Analysis failed for candidate", ids[i], err);
+                    errorMsg = err.response?.data?.detail || err.message || "Unknown error";
+                    break; // Stop processing further candidates if one fails
+                }
+            }
+            
             await onAnalysisComplete();
-            onClose();
-        } catch (error: any) {
-            console.error("Analysis failed:", error);
-            const errorMsg = error.response?.data?.detail || error.message || "Unknown error";
-            alert(`Analysis failed: ${errorMsg}`);
+            
+            if (errorMsg) {
+                alert(`Analysis stopped due to error: ${errorMsg}\nSome candidates may have been processed successfully.`);
+            } else {
+                onClose();
+            }
         } finally {
             setIsUploading(false);
         }

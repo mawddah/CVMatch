@@ -25,7 +25,7 @@ function Dashboard() {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [viewMode, setViewMode] = useState('grid');
   const [candidates, setCandidates] = useState([]);
-  const [currentJdId, setCurrentJdId] = useState(1);
+  const [currentJdId, setCurrentJdId] = useState(null);
   const [activePage, setActivePage] = useState('Dashboard');
   const [availableJobs, setAvailableJobs] = useState([]);
 

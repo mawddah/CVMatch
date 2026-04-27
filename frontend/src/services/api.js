@@ -93,6 +93,16 @@ export const api = {
     const response = await apiClient.get('/candidates/');
     return response.data;
   },
+  deleteCandidate: async (candidateId) => {
+    const response = await apiClient.delete(`/candidates/${candidateId}`);
+    return response.data;
+  },
+  bulkDeleteCandidates: async (candidateIds) => {
+    const response = await apiClient.delete('/candidates/bulk', {
+      data: { candidate_ids: candidateIds }
+    });
+    return response.data;
+  },
   analyzeMatches: async (jdId, candidateIds) => {
     const response = await apiClient.post('/analyze-matches/', {
       jd_id: jdId,

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, X, FileText, Database, Search, CheckSquare, Square } from 'lucide-react';
+import { Upload, X, FileText, Database, Search, CheckSquare, Square, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Candidate {
     id: number;
@@ -18,6 +19,9 @@ interface UploadModalProps {
 }
 
 const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onAnalysisComplete, currentJdId }) => {
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'Admin';
+
     const [files, setFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     
@@ -25,6 +29,10 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onAnalysisCo
     const [allCandidates, setAllCandidates] = useState<Candidate[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<number>>(new Set());
+
+    // Deletion states
+    const [deleteState, setDeleteState] = useState<{ isOpen: boolean; type: 'single' | 'bulk'; id?: number }>({ isOpen: false, type: 'single' });
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -116,6 +124,31 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onAnalysisCo
         }
     };
 
+    const confirmDelete = async () => {
+        setIsDeleting(true);
+        try {
+            if (deleteState.type === 'single' && deleteState.id) {
+                await api.deleteCandidate(deleteState.id);
+                setSelectedCandidateIds(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(deleteState.id!);
+                    return newSet;
+                });
+            } else if (deleteState.type === 'bulk') {
+                await api.bulkDeleteCandidates(Array.from(selectedCandidateIds));
+                setSelectedCandidateIds(new Set());
+            }
+            await fetchAllCandidates();
+            setDeleteState({ isOpen: false, type: 'single' });
+        } catch (error: any) {
+            console.error("Delete failed:", error);
+            const errorMsg = error.response?.data?.detail || error.message || "Unknown error";
+            alert(`Delete failed: ${errorMsg}`);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     const filteredCandidates = allCandidates.filter(c => 
         (c.name && c.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (c.skills && c.skills.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -202,7 +235,18 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onAnalysisCo
                 {/* CV Selection Pool */}
                 <div className="flex-1 overflow-hidden flex flex-col px-8 pb-4">
                     <div className="flex items-center justify-between mt-4 mb-4">
-                        <h3 className="text-lg font-bold text-slate-800">CV Selection Pool</h3>
+                        <div className="flex items-center gap-4">
+                            <h3 className="text-lg font-bold text-slate-800">CV Selection Pool</h3>
+                            {isAdmin && selectedCandidateIds.size > 0 && (
+                                <button
+                                    onClick={() => setDeleteState({ isOpen: true, type: 'bulk' })}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-semibold transition-colors border border-red-100"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete Selected ({selectedCandidateIds.size})
+                                </button>
+                            )}
+                        </div>
                         <div className="relative">
                             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
@@ -239,22 +283,35 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onAnalysisCo
                             filteredCandidates.map((candidate) => (
                                 <div 
                                     key={candidate.id}
-                                    onClick={() => toggleCandidateSelection(candidate.id)}
                                     className={`flex items-center gap-4 p-3 rounded-lg cursor-pointer transition-all border ${
                                         selectedCandidateIds.has(candidate.id) 
                                             ? 'bg-primary-50 border-primary-200 shadow-sm' 
                                             : 'bg-white border-white hover:border-slate-200'
                                     }`}
                                 >
-                                    {selectedCandidateIds.has(candidate.id) ? (
-                                        <CheckSquare className="w-5 h-5 text-primary-500 flex-shrink-0" />
-                                    ) : (
-                                        <Square className="w-5 h-5 text-slate-300 flex-shrink-0" />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-slate-900 truncate">{candidate.name || "Unknown Candidate"}</p>
-                                        <p className="text-xs text-slate-500 truncate">{candidate.skills || "No skills extracted"}</p>
+                                    <div className="flex-1 flex items-center gap-4 min-w-0" onClick={() => toggleCandidateSelection(candidate.id)}>
+                                        {selectedCandidateIds.has(candidate.id) ? (
+                                            <CheckSquare className="w-5 h-5 text-primary-500 flex-shrink-0" />
+                                        ) : (
+                                            <Square className="w-5 h-5 text-slate-300 flex-shrink-0" />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-slate-900 truncate">{candidate.name || "Unknown Candidate"}</p>
+                                            <p className="text-xs text-slate-500 truncate">{candidate.skills || "No skills extracted"}</p>
+                                        </div>
                                     </div>
+                                    {isAdmin && (
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeleteState({ isOpen: true, type: 'single', id: candidate.id });
+                                            }}
+                                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                                            title="Delete Candidate"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
                                 </div>
                             ))
                         )}
@@ -273,6 +330,34 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onAnalysisCo
                         {isUploading ? "Processing..." : `Start Analyzing (${selectedCandidateIds.size})`}
                     </button>
                 </div>
+
+                {/* Confirmation Modal */}
+                {deleteState.isOpen && (
+                    <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm rounded-3xl">
+                        <div className="bg-white p-6 rounded-2xl max-w-sm w-full shadow-xl">
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">Confirm Deletion</h3>
+                            <p className="text-slate-600 mb-6">
+                                Are you sure you want to delete {deleteState.type === 'bulk' ? `${selectedCandidateIds.size} selected CVs` : 'this CV'}? This action cannot be undone.
+                            </p>
+                            <div className="flex justify-end gap-3">
+                                <button 
+                                    onClick={() => setDeleteState({ isOpen: false, type: 'single' })}
+                                    disabled={isDeleting}
+                                    className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={confirmDelete}
+                                    disabled={isDeleting}
+                                    className="px-4 py-2 font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl shadow-lg shadow-red-500/20 transition-all flex items-center gap-2"
+                                >
+                                    {isDeleting ? "Deleting..." : "Delete"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </motion.div>
         </div>
     );

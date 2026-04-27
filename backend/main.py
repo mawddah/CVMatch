@@ -333,6 +333,30 @@ async def get_candidates(jd_id: int, db: Session = Depends(database.get_db), cur
 async def get_all_candidates(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     return db.query(models.Candidate).order_by(models.Candidate.created_at.desc()).all()
 
+class BulkDeleteRequest(BaseModel):
+    candidate_ids: List[int]
+
+@app.delete("/candidates/bulk")
+async def delete_candidates_bulk(request: BulkDeleteRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
+    for cid in request.candidate_ids:
+        candidate = db.get(models.Candidate, cid)
+        if candidate:
+            db.query(models.MatchResult).filter(models.MatchResult.candidate_id == cid).delete()
+            db.delete(candidate)
+    db.commit()
+    return {"message": "Selected candidates deleted successfully"}
+
+@app.delete("/candidates/{candidate_id}")
+async def delete_candidate(candidate_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_admin)):
+    candidate = db.get(models.Candidate, candidate_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+        
+    db.query(models.MatchResult).filter(models.MatchResult.candidate_id == candidate_id).delete()
+    db.delete(candidate)
+    db.commit()
+    return {"message": "Candidate deleted successfully"}
+
 @app.post("/candidates/{id}/summarize")
 async def summarize_candidate(id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     candidate = db.get(models.Candidate, id)

@@ -17,6 +17,11 @@ import pandas as pd
 import io
 from fastapi.responses import StreamingResponse
 from fastapi import Request
+from pydantic import BaseModel
+
+class AnalyzeRequest(BaseModel):
+    jd_id: int
+    candidate_ids: List[int]
 
 # In a serverless environment like Vercel, creating tables on every cold start is 
 # an anti-pattern and can cause Function Invocation timeouts. 
@@ -248,6 +253,53 @@ async def upload_cv(jd_id: int, file: UploadFile = File(...), db: Session = Depe
         }
     except HTTPException:
         raise
+    except Exception as e:
+        error_msg = f"{str(e)} | Trace: {traceback.format_exc()}"
+        print(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+
+@app.post("/analyze-matches/")
+async def analyze_matches(request: AnalyzeRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    import traceback
+    try:
+        jd = db.get(models.JobDescription, request.jd_id)
+        if not jd:
+            raise HTTPException(status_code=404, detail="Job Description not found")
+            
+        results = []
+        for cid in request.candidate_ids:
+            candidate = db.get(models.Candidate, cid)
+            if not candidate:
+                continue
+                
+            # Remove any existing match to avoid duplicates
+            existing_match = db.query(models.MatchResult).filter(
+                models.MatchResult.jd_id == request.jd_id,
+                models.MatchResult.candidate_id == cid
+            ).first()
+            if existing_match:
+                db.delete(existing_match)
+                db.commit()
+                
+            # Analyze match using Gemini
+            analysis = await gemini_service.analyze_match(candidate.raw_text, jd.description_text)
+            if not analysis:
+                continue # or raise an error, but let's continue to other candidates
+                
+            match_result = models.MatchResult(
+                jd_id=request.jd_id,
+                candidate_id=candidate.id,
+                match_percentage=analysis.get("match_percentage"),
+                strengths=analysis.get("strengths"),
+                weaknesses=analysis.get("weaknesses"),
+                soft_skills_analysis=analysis.get("soft_skills_analysis"),
+                culture_fit_score=analysis.get("culture_fit_score")
+            )
+            db.add(match_result)
+            db.commit()
+            results.append({"candidate_id": cid, "status": "success"})
+            
+        return {"message": f"Successfully analyzed {len(results)} candidates.", "results": results}
     except Exception as e:
         error_msg = f"{str(e)} | Trace: {traceback.format_exc()}"
         print(error_msg)

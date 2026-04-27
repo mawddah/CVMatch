@@ -58,14 +58,12 @@ function Dashboard() {
     }
   };
 
-  const handleCvUpload = async (file) => {
+  const handleAnalysisComplete = async () => {
     try {
-      await api.uploadCV(currentJdId, file);
       await fetchCandidates();
       fetchJobs(); // Update counts
     } catch (error) {
-      console.error("Upload error:", error);
-      throw error;
+      console.error("Refresh error:", error);
     }
   };
 
@@ -226,7 +224,7 @@ function Dashboard() {
           <UploadModal
             isOpen={isUploadOpen}
             onClose={() => setIsUploadOpen(false)}
-            onUpload={handleCvUpload}
+            onAnalysisComplete={handleAnalysisComplete}
             currentJdId={currentJdId}
           />
         )}

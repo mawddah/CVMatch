@@ -89,6 +89,17 @@ export const api = {
     const response = await apiClient.get(`/candidates/${jdId}/`);
     return response.data;
   },
+  getAllCandidates: async () => {
+    const response = await apiClient.get('/candidates/');
+    return response.data;
+  },
+  analyzeMatches: async (jdId, candidateIds) => {
+    const response = await apiClient.post('/analyze-matches/', {
+      jd_id: jdId,
+      candidate_ids: candidateIds
+    });
+    return response.data;
+  },
   
   // --- REPORTS ---
   getReportSummary: async () => {

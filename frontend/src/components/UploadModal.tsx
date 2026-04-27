@@ -149,10 +149,20 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onAnalysisCo
         }
     };
 
-    const filteredCandidates = allCandidates.filter(c => 
-        (c.name && c.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (c.skills && c.skills.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const filteredCandidates = allCandidates.filter(c => {
+        const nameMatch = c.name && c.name.toLowerCase().includes(searchQuery.toLowerCase());
+        
+        let skillsMatch = false;
+        if (c.skills) {
+            if (Array.isArray(c.skills)) {
+                skillsMatch = c.skills.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
+            } else if (typeof c.skills === 'string') {
+                skillsMatch = (c.skills as string).toLowerCase().includes(searchQuery.toLowerCase());
+            }
+        }
+        
+        return nameMatch || skillsMatch;
+    });
 
     if (!isOpen) return null;
 

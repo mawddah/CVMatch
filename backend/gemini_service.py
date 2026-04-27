@@ -2,6 +2,8 @@ import os
 import google.generativeai as genai
 import json
 from dotenv import load_dotenv
+import asyncio
+from google.api_core.exceptions import ResourceExhausted
 
 load_dotenv()
 
@@ -19,6 +21,22 @@ def parse_json_response(response_text):
     elif json_str.startswith("```"):
         json_str = json_str[3:-3].strip()
     return json.loads(json_str)
+
+async def generate_with_retry(prompt, max_retries=4):
+    for attempt in range(max_retries):
+        try:
+            return await model.generate_content_async(prompt)
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "Quota exceeded" in error_str or isinstance(e, ResourceExhausted):
+                if attempt == max_retries - 1:
+                    raise e
+                # Wait 5s, 10s, 20s
+                delay = 5 * (2 ** attempt)
+                print(f"Rate limit hit. Retrying in {delay} seconds (Attempt {attempt + 1}/{max_retries})...")
+                await asyncio.sleep(delay)
+            else:
+                raise e
 
 async def extract_candidate_info(cv_text: str):
     prompt = f"""
@@ -38,7 +56,7 @@ async def extract_candidate_info(cv_text: str):
     if not cv_text or not cv_text.strip():
         raise ValueError("The parsed CV text is empty. The PDF might be an image-only PDF not supported by simple text extraction.")
 
-    response = model.generate_content(prompt)
+    response = await generate_with_retry(prompt)
     return parse_json_response(response.text)
 
 async def analyze_match(cv_text: str, jd_text: str):
@@ -63,7 +81,7 @@ async def analyze_match(cv_text: str, jd_text: str):
     if not cv_text or not cv_text.strip():
         raise ValueError("The parsed CV text is empty.")
 
-    response = model.generate_content(prompt)
+    response = await generate_with_retry(prompt)
     return parse_json_response(response.text)
 
 async def generate_profile_summary(cv_text: str):
@@ -77,5 +95,5 @@ async def generate_profile_summary(cv_text: str):
     if not cv_text or not cv_text.strip():
         raise ValueError("The parsed CV text is empty.")
         
-    response = model.generate_content(prompt)
+    response = await generate_with_retry(prompt)
     return {"summary": response.text.strip()}

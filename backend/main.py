@@ -460,3 +460,21 @@ async def export_reports(db: Session = Depends(database.get_db), current_user: m
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers=headers
     )
+
+@app.get("/test-models")
+async def test_models():
+    import google.generativeai as genai
+    import os
+    try:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return {"error": "GEMINI_API_KEY environment variable is not set"}
+            
+        genai.configure(api_key=api_key)
+        models = []
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                models.append(m.name)
+        return {"models": models, "api_key_prefix": api_key[:10] + "..." if api_key else None}
+    except Exception as e:
+        return {"error": str(e)}
